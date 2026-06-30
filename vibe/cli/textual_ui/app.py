@@ -141,7 +141,8 @@ from vibe.cli.vscode_extension_promo import (
 )
 from vibe.core.agent_loop import AgentLoop, TeleportError
 from vibe.core.agents import AgentProfile
-from vibe.core.audio_player.audio_player import AudioPlayer, check_audio_available
+from vibe.core.audio_player.audio_player import AudioPlayer
+from vibe.core.audio_player.audio_player_port import NoAudioOutputDeviceError
 from vibe.core.audio_recorder import AudioRecorder
 from vibe.core.autocompletion.path_prompt import (
     PathPromptPayload,
@@ -1123,10 +1124,20 @@ class VibeApp(App):  # noqa: PLR0904
             self.agent_loop.refresh_config()
             self._narrator_manager.sync()
             if non_voice_changes.get("narrator_enabled") is True:
-                audio_error = check_audio_available()
-                if audio_error:
+                try:
+                    AudioPlayer._guard_audio_output()
+                except RuntimeError:
                     self.notify(
-                        f"Narrator enabled but audio is unavailable: {audio_error}",
+                        "Narrator enabled but sounddevice is not installed. "
+                        "Install it with: pip install sounddevice  "
+                        "(PortAudio system library also required: "
+                        "apt install libportaudio2 / pacman -S portaudio / brew install portaudio)",
+                        severity="warning",
+                        timeout=15,
+                    )
+                except NoAudioOutputDeviceError as exc:
+                    self.notify(
+                        f"Narrator enabled but audio is unavailable: {exc}",
                         severity="warning",
                         timeout=15,
                     )
